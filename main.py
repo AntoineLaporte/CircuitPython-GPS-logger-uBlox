@@ -71,14 +71,16 @@ class UbxStream():
                                 return self.ubx_NAV_PVT()
 
     def ubx_NAV_PVT(self):
-        if(self.validate_checksum(self.buff)):
+        if(self.validate_checksum(1, 7, self.buff)):
             buff_cpy = self.buff[4:96]
             self.iTOW, self.year, self.month, self.day, self.hour, self.minute, self.second, self.valid, self.tAcc, self.nano, self.fixType, self.flags, self.flags2, self.numSV, self.lon, self.lat, self.height, self.hMSL, self.hAcc, self.vAcc, self.velN, self.velE, self.velD, self.gSpeed, self.headMot, self.sAcc, self.headAcc, self.pDOP, reserved11, reserved12, reserved13, reserved14, reserved15, reserved16,  self.headVeh, self.magDec, self.magAcc = struct.unpack('LH5BBLlB2BB4l2L5lLLH6BlhH', buff_cpy)
+            self.ubx_class = '01'
+            self.ubx_id = '07'
             return True
         else:
             return False
 
-    def validate_checksum(self, buff):
+    def validate_checksum(self, ubx_class, ubx_id, buff):
         check1 = 0
         check2 = 0
         chk1 = buff[96]
@@ -103,7 +105,6 @@ filefullpath = ''
 def setup():
 
     uBX_nav_pvt_msg = UbxStream(uart_gps)
-    global filefullpath
 
     Disable_NMEA = bytes ([
         0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x24, # GxGGA
@@ -139,16 +140,18 @@ def setup():
         ])
     uart_gps.write(commands2)
 
+
+def create_file ():
+    global filefullpath
     while True:
-        if uBX_nav_pvt_msg.read():
+        if uBX_nav_pvt_msg.read() and uBX_nav_pvt_msg.numSV > 6:
             foldername = '/{:02d}-{:02d}-{:02d}'.format(uBX_nav_pvt_msg.year - 2000,uBX_nav_pvt_msg.month,uBX_nav_pvt_msg.day)
             filename = '{:02d}-{:02d}-{:02d}.csv'.format(uBX_nav_pvt_msg.hour,uBX_nav_pvt_msg.minute,uBX_nav_pvt_msg.second)
             try:
                 os.mkdir(foldername)
                 print('folder created')
             except:
-                print('folder already exist or memory in read only')
-
+                print('folder already exist')
             os.chdir(foldername)
             with open(filename, "a") as f:
                 f.write('time,lat,lon,hMSL,velN,velE,velD,hAcc,vAcc,sAcc,heading,cAcc,gpsFix,numSV\n')
@@ -160,13 +163,16 @@ def setup():
 ##################### START OF THE LOOP ####################
 ############################################################
 def loop():
+    create_file()
     global filefullpath
+    FlySightString = ''
+    bufferMilliseconds = ''
     trigger = False
-    writeInFileTrigger = True
     counter = 0
     with open(filefullpath, "a") as f:
         while True:
             if uBX_nav_pvt_msg.read():
+
                 bufferMilliseconds = round(uBX_nav_pvt_msg.nano / 100000000)*10
 
                 FlySightString = '{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:02}Z,{:010.7f},{:010.7f},{:.3f},{:.2f},{:.2f},{:.2f},{:.3f},{:.3f},{:.2f},{:.5f},{:.5f},{},'.format(
@@ -182,6 +188,7 @@ def loop():
                   FlySightString += "20\n"
                 else:
                   FlySightString += '{}\n'.format(uBX_nav_pvt_msg.numSV)
+                print(FlySightString)
 
                 f.write(FlySightString)
 
@@ -193,10 +200,9 @@ def loop():
                 if trigger:
                     if int(uBX_nav_pvt_msg.velD) <= 1000:
                         counter += 1
-                        if counter >25:
+                        if counter >50:
                             f.close()
                             break
-
 
 
 ############################################################
