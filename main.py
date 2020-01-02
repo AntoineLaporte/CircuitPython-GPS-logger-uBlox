@@ -185,7 +185,7 @@ def loop():
 
                 f.write(FlySightString)
 
-                if int(uBX_nav_pvt_msg.velD/1000) in range (-2, 3):
+                if int(uBX_nav_pvt_msg.velD/1000) not in range (-2, 3):
                     counter += 1
                     if counter >20 and not trigger:
                         trigger = True
