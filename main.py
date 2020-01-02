@@ -2,7 +2,6 @@ import time
 import board
 import busio
 import math
-import pulseio
 import array
 import sys
 import struct
@@ -11,7 +10,7 @@ import os
 import microcontroller
 import digitalio
 import analogio
-
+import rtc
 
 time.sleep(1)
 
@@ -21,7 +20,7 @@ voltage = (analogin.value * 3.3) / 65536
 if voltage > 2:
     print('not executing the code with USB connected')  #has to be also chnage in boot.py
                                                         #to execute the code in USB mode
-    sys.exit()
+    #sys.exit()
 
 RX = board.RX
 TX = board.TX
@@ -40,6 +39,11 @@ uart_gps.deinit()
 
 uart_gps = busio.UART(TX, RX, baudrate=38400, timeout=1)
 
+class RTC(object):
+    @property
+    def datetime(self):
+        return time.struct_time((2018, 3, 17, 21, 1, 47, 0, 0, 0))
+        
 class UbxStream():
     def __init__(self, uart):
         # pyserial 3.x has min requirement python2.7
@@ -144,9 +148,15 @@ def setup():
 def create_file ():
     global filefullpath
     while True:
+        print(uBX_nav_pvt_msg.numSV)
         if uBX_nav_pvt_msg.read() and uBX_nav_pvt_msg.numSV > 6:
             foldername = '/{:02d}-{:02d}-{:02d}'.format(uBX_nav_pvt_msg.year - 2000,uBX_nav_pvt_msg.month,uBX_nav_pvt_msg.day)
             filename = '{:02d}-{:02d}-{:02d}.csv'.format(uBX_nav_pvt_msg.hour,uBX_nav_pvt_msg.minute,uBX_nav_pvt_msg.second)
+            date = time.struct_time((uBX_nav_pvt_msg.year, uBX_nav_pvt_msg.month, uBX_nav_pvt_msg.day,
+                                    uBX_nav_pvt_msg.hour, uBX_nav_pvt_msg.minute, uBX_nav_pvt_msg.second,0,-1,-1))
+            my_rtc = rtc.RTC()
+            my_rtc.datetime = date
+            rtc.set_time_source(my_rtc)
             try:
                 os.mkdir(foldername)
                 print('folder created')
